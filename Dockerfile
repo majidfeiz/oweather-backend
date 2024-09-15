@@ -1,39 +1,38 @@
-# Use the official PHP 8.3 image with FPM
-FROM php:8.3-fpm
+FROM webdevops/php-nginx:8.3
 
-# Set working directory
-WORKDIR /var/www/html
 
-# Install system dependencies and PHP extensions
-RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libonig-dev \
-    libxml2-dev \
-    unzip \
-    git \
-    libicu-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_mysql intl \
-    && pecl install xdebug \
-    && docker-php-ext-enable xdebug \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Update the GPG key for the NGINX repository
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ABF5BD827BD9BF62
+
+# Update package lists and install required packages
+RUN apt-get update
+# Install required PHP extensions
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions
+
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy application files
-COPY . .
+# Set environment variables
+ENV ROOT=/app
+ENV WEB_DOCUMENT_ROOT /app/public
+ENV APP_ENV production
+ENV PHP_POST_MAX_SIZE 500M
+ENV PHP_MAX_EXECUTION_TIME 300
+ENV PHP_UPLOAD_MAX_FILESIZE 500M
+ENV PHP_MEMORY_LIMIT 512M
 
-# Install Laravel dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Set working directory and copy application code
+WORKDIR /app
+COPY ./ $ROOT
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html
+# Install dependencies
+RUN composer install --ignore-platform-reqs --no-interaction --no-plugins --no-scripts --prefer-dist
 
-# Expose port 80
+# Composer update
+
+RUN composer update
+
+
 EXPOSE 80
-
-# Start PHP-FPM server
-CMD ["php-fpm"]
